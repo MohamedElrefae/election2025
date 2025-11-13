@@ -523,10 +523,10 @@ function App() {
                         رقم الناخب{getSortIcon('voter_id')}
                       </th>
                       <th 
-                        onClick={() => handleSort('first_name')}
+                        onClick={() => handleSort('full_name')}
                         style={{ cursor: 'pointer' }}
                       >
-                        الاسم الأول{getSortIcon('first_name')}
+                        الاسم الكامل{getSortIcon('full_name')}
                       </th>
                       <th 
                         onClick={() => handleSort('family_name')}
@@ -546,8 +546,8 @@ function App() {
                     {paginatedVoters.map(voter => (
                       <tr key={voter.id}>
                         <td><span className="badge">{voter.voter_id}</span></td>
-                        <td>{voter.first_name || voter.full_name?.split(' ')[0]}</td>
-                        <td><strong>{voter.family_name || voter.full_name?.split(' ').pop()}</strong></td>
+                        <td>{voter.full_name}</td>
+                        <td><strong>{voter.family_name}</strong></td>
                         <td>
                           {voter.locations?.location_number} - {voter.locations?.location_name}
                         </td>
