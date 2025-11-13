@@ -11,7 +11,9 @@ function App() {
   const [locations, setLocations] = useState([])
   const [voters, setVoters] = useState([])
   const [families, setFamilies] = useState([])
+  const [familyOptions, setFamilyOptions] = useState([])
   const [stats, setStats] = useState({ totalLocations: 0, totalVoters: 0, totalFamilies: 0 })
+  const [votersTotal, setVotersTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   
@@ -59,6 +61,16 @@ function App() {
       if (locError) throw locError
       setLocations(locData || [])
 
+      // Load family options for filters (top families by size)
+      const { data: famOptions, error: famOptionsError } = await supabase
+        .from('families_agg')
+        .select('*')
+        .order('member_count', { ascending: false })
+        .limit(500)
+
+      if (famOptionsError) throw famOptionsError
+      setFamilyOptions(famOptions || [])
+
     } catch (err) {
       setError(err.message)
       console.error('Error loading data:', err)
@@ -67,103 +79,92 @@ function App() {
     }
   }
 
-  const loadVoters = async (locationId = null) => {
+  const loadVoters = async (locationId = null, page = 1, search = '', family = '') => {
     try {
       setLoading(true)
-      
-      // Load all voters with pagination
-      let allVoters = []
-      let page = 0
-      const pageSize = 1000
-      let hasMore = true
+      setError(null)
 
-      while (hasMore) {
-        let query = supabase
-          .from('voters')
-          .select('*, locations(location_name, location_number)')
-          .order('voter_id', { ascending: true })
-          .range(page * pageSize, (page + 1) * pageSize - 1)
+      const from = (page - 1) * itemsPerPage
+      const to = from + itemsPerPage - 1
 
-        if (locationId) {
-          query = query.eq('location_id', locationId)
-        }
+      let query = supabase
+        .from('voters')
+        .select('*, locations(location_name, location_number)', { count: 'exact' })
 
-        const { data, error } = await query
+      if (locationId) {
+        query = query.eq('location_id', locationId)
+      }
 
-        if (error) throw error
-        
-        if (data && data.length > 0) {
-          allVoters = [...allVoters, ...data]
-          page++
-          hasMore = data.length === pageSize
+      if (family) {
+        query = query.eq('family_name', family)
+      }
+
+      if (search) {
+        const term = `%${search}%`
+
+        const isNumericSearch = !Number.isNaN(Number(search)) && search.trim() !== ''
+
+        if (isNumericSearch) {
+          query = query.or(
+            `full_name.ilike.${term},first_name.ilike.${term},family_name.ilike.${term},voter_id.eq.${search}`
+          )
         } else {
-          hasMore = false
+          query = query.or(
+            `full_name.ilike.${term},first_name.ilike.${term},family_name.ilike.${term}`
+          )
         }
       }
 
-      setVoters(allVoters)
+      query = query
+        .order('voter_id', { ascending: true })
+        .range(from, to)
+
+      const { data, error, count } = await query
+
+      if (error) throw error
+
+      setVoters(data || [])
+      setVotersTotal(count || 0)
+      setStats(prev => ({
+        ...prev,
+        totalVoters: count ?? prev.totalVoters
+      }))
     } catch (err) {
       setError(err.message)
+      console.error('Error loading voters:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  const loadFamilies = async () => {
+  const loadFamilies = async (page = 1, search = '') => {
     try {
       setLoading(true)
-      
-      // Load all voters with family names using pagination
-      let allVoters = []
-      let page = 0
-      const pageSize = 1000
-      let hasMore = true
+      setError(null)
 
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('voters')
-          .select('family_name, location_id, locations(location_name)')
-          .not('family_name', 'is', null)
-          .not('family_name', 'eq', '')
-          .range(page * pageSize, (page + 1) * pageSize - 1)
+      const from = (page - 1) * itemsPerPage
+      const to = from + itemsPerPage - 1
 
-        if (error) throw error
+      let query = supabase
+        .from('families_agg')
+        .select('*', { count: 'exact' })
 
-        if (data && data.length > 0) {
-          allVoters = [...allVoters, ...data]
-          page++
-          hasMore = data.length === pageSize
-        } else {
-          hasMore = false
-        }
+      if (search) {
+        const term = `%${search}%`
+        query = query.ilike('family_name', term)
       }
 
-      // Group by family name
-      const familyMap = {}
-      allVoters.forEach(voter => {
-        const familyName = voter.family_name
-        if (!familyMap[familyName]) {
-          familyMap[familyName] = {
-            family_name: familyName,
-            member_count: 0,
-            locations: new Set()
-          }
-        }
-        familyMap[familyName].member_count++
-        familyMap[familyName].locations.add(voter.location_id)
-      })
+      const { data, error, count } = await query
+        .order('member_count', { ascending: false })
+        .range(from, to)
 
-      // Convert to array and sort by member count
-      const familiesArray = Object.values(familyMap).map(f => ({
-        ...f,
-        location_count: f.locations.size,
-        locations: Array.from(f.locations)
-      })).sort((a, b) => b.member_count - a.member_count)
+      if (error) throw error
 
-      setFamilies(familiesArray)
-      setStats(prev => ({ ...prev, totalFamilies: familiesArray.length }))
+      setFamilies(data || [])
+      setStats(prev => ({ ...prev, totalFamilies: count || 0 }))
     } catch (err) {
       setError(err.message)
+      console.error('Error loading families:', err)
     } finally {
       setLoading(false)
     }
@@ -171,11 +172,11 @@ function App() {
 
   useEffect(() => {
     if (activeTab === 'voters') {
-      loadVoters(selectedLocation || null)
+      loadVoters(selectedLocation || null, currentPage, searchTerm, selectedFamily)
     } else if (activeTab === 'families') {
-      loadFamilies()
+      loadFamilies(currentPage, searchTerm)
     }
-  }, [activeTab, selectedLocation])
+  }, [activeTab, selectedLocation, currentPage, searchTerm, selectedFamily])
 
   const filteredLocations = locations.filter(loc =>
     loc.location_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -289,20 +290,17 @@ function App() {
     currentPage * itemsPerPage
   )
 
-  const paginatedVoters = sortedVoters.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  )
+  const paginatedVoters = sortedVoters
 
-  const paginatedFamilies = sortedFamilies.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  )
+  const paginatedFamilies = sortedFamilies
 
   const totalPages = Math.ceil(
-    (activeTab === 'locations' ? sortedLocations.length : 
-     activeTab === 'voters' ? sortedVoters.length : 
-     sortedFamilies.length) / itemsPerPage
+    (activeTab === 'locations'
+      ? sortedLocations.length
+      : activeTab === 'voters'
+        ? (stats.totalVoters || sortedVoters.length)
+        : (stats.totalFamilies || sortedFamilies.length)
+    ) / itemsPerPage
   )
 
   const getSortIcon = (columnKey) => {
@@ -312,12 +310,23 @@ function App() {
     return sortConfig.direction === 'asc' ? ' ↑' : ' ↓'
   }
 
+  const handlePrint = () => {
+    window.print()
+  }
+
   return (
     <div className="app">
       <div className="container">
         <div className="header">
-          <h1>🗳️ إدارة بيانات الانتخابات - مطوبس 2025</h1>
-          <p>نظام إدارة قاعدة بيانات الناخبين - محافظة كفر الشيخ</p>
+          <div className="header-actions">
+            <div>
+              <h1>🗳️ إدارة بيانات الانتخابات - مطوبس 2025</h1>
+              <p>نظام إدارة قاعدة بيانات الناخبين - محافظة كفر الشيخ</p>
+            </div>
+            <button className="print-button" type="button" onClick={handlePrint}>
+              طباعة الصفحة الحالية
+            </button>
+          </div>
         </div>
 
         <div className="stats-grid">
@@ -428,7 +437,7 @@ function App() {
                   }}
                 >
                   <option value="">جميع العائلات</option>
-                  {families.slice(0, 100).map((fam, idx) => (
+                  {familyOptions.slice(0, 100).map((fam, idx) => (
                     <option key={idx} value={fam.family_name}>
                       {fam.family_name} ({fam.member_count})
                     </option>
