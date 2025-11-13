@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { Search, Users, MapPin, Database, Filter, UsersRound } from 'lucide-react'
+import { Users, MapPin, UsersRound } from 'lucide-react'
 
 const supabaseUrl = 'https://gridbhusfotahmgulgdd.supabase.co'
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdyaWRiaHVzZm90YWhtZ3VsZ2RkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NDYzNDMsImV4cCI6MjA3ODUyMjM0M30.HXHXIDqepRAyi_BRnVh26rxZBlkksPd84IFH4chgdS0'
@@ -296,7 +296,7 @@ function App() {
           </div>
           <div className="stat-card">
             <h3>إجمالي العائلات</h3>
-            <div className="value">{stats.totalFamilies.toLocaleString()}</div>
+            <div className="value">{(stats.totalFamilies || 0).toLocaleString()}</div>
           </div>
           <div className="stat-card">
             <h3>متوسط الناخبين لكل موقع</h3>
