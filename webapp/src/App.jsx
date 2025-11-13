@@ -70,19 +70,38 @@ function App() {
   const loadVoters = async (locationId = null) => {
     try {
       setLoading(true)
-      let query = supabase
-        .from('voters')
-        .select('*, locations(location_name, location_number)')
-        .order('voter_id', { ascending: true })
+      
+      // Load all voters with pagination
+      let allVoters = []
+      let page = 0
+      const pageSize = 1000
+      let hasMore = true
 
-      if (locationId) {
-        query = query.eq('location_id', locationId)
+      while (hasMore) {
+        let query = supabase
+          .from('voters')
+          .select('*, locations(location_name, location_number)')
+          .order('voter_id', { ascending: true })
+          .range(page * pageSize, (page + 1) * pageSize - 1)
+
+        if (locationId) {
+          query = query.eq('location_id', locationId)
+        }
+
+        const { data, error } = await query
+
+        if (error) throw error
+        
+        if (data && data.length > 0) {
+          allVoters = [...allVoters, ...data]
+          page++
+          hasMore = data.length === pageSize
+        } else {
+          hasMore = false
+        }
       }
 
-      const { data, error } = await query.limit(1000)
-
-      if (error) throw error
-      setVoters(data || [])
+      setVoters(allVoters)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -93,19 +112,35 @@ function App() {
   const loadFamilies = async () => {
     try {
       setLoading(true)
-      // Get all voters with family names
-      const { data, error } = await supabase
-        .from('voters')
-        .select('family_name, location_id, locations(location_name)')
-        .not('family_name', 'is', null)
-        .not('family_name', 'eq', '')
-        .limit(10000)
+      
+      // Load all voters with family names using pagination
+      let allVoters = []
+      let page = 0
+      const pageSize = 1000
+      let hasMore = true
 
-      if (error) throw error
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('voters')
+          .select('family_name, location_id, locations(location_name)')
+          .not('family_name', 'is', null)
+          .not('family_name', 'eq', '')
+          .range(page * pageSize, (page + 1) * pageSize - 1)
+
+        if (error) throw error
+
+        if (data && data.length > 0) {
+          allVoters = [...allVoters, ...data]
+          page++
+          hasMore = data.length === pageSize
+        } else {
+          hasMore = false
+        }
+      }
 
       // Group by family name
       const familyMap = {}
-      data.forEach(voter => {
+      allVoters.forEach(voter => {
         const familyName = voter.family_name
         if (!familyMap[familyName]) {
           familyMap[familyName] = {
@@ -404,7 +439,13 @@ function App() {
           </div>
 
           {loading ? (
-            <div className="loading">جاري التحميل...</div>
+            <div className="loading">
+              <div>جاري التحميل...</div>
+              <div style={{ fontSize: '0.875rem', marginTop: '10px', color: '#718096' }}>
+                {activeTab === 'voters' && voters.length > 0 && `تم تحميل ${voters.length.toLocaleString()} ناخب...`}
+                {activeTab === 'families' && families.length > 0 && `تم تحميل ${families.length.toLocaleString()} عائلة...`}
+              </div>
+            </div>
           ) : activeTab === 'families' ? (
             <>
               <div className="table-container">
