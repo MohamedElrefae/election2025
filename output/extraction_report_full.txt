@@ -1,0 +1,11 @@
+Egypt 2025 Election PDF Extraction Report - Motobus District
+============================================================
+
+Total Locations: 1021
+Total Voters: 196185
+Average Voters per Location: 192.1
+
+Governorate: كفر الشيخ
+District: مطوبس
+
+Extraction completed: 2025-11-12 13:09:40.887093

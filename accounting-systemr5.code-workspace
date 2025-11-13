@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../5/accounting-systemr5"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"kiroAgent.configureMCP": "Disabled"
+	}
+}

@@ -1,0 +1,23 @@
+Egypt 2025 Election PDF Extraction - FINAL REPORT
+Motobus District, Kafr El-Sheikh Governorate
+============================================================
+
+Source File: motobus .pdf
+Total Pages Processed: 1021
+
+FINAL RESULTS:
+Total Polling Locations: 1021
+Total Registered Voters: 193,871
+Average Voters per Location: 189.9
+
+Data Quality:
+- Original extracted entries: 196,185
+- Invalid entries removed: 2,314
+- Data accuracy: 98.8%
+
+Output Files Generated:
+- voters_cleaned.csv: Individual voter records
+- locations_cleaned.csv: Polling location details
+- voter_data_full.json: Complete dataset in JSON format
+
+Extraction completed: 2025-11-12 13:11:01.138485
