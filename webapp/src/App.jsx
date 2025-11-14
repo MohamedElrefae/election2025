@@ -330,37 +330,23 @@ function App() {
       const now = new Date()
       const dateStr = now.toLocaleString('ar-EG')
 
-      const printWindow = window.open('', '_blank', 'noopener,noreferrer')
-      if (!printWindow) return
+      // Create a temporary header visible only in printn      const header = document.createElement('div')
+      header.className = 'print-header'
+      header.innerHTML = `<h1>${title}</h1><div class="meta">${dateStr}</div>`
+      content.insertBefore(header, content.firstChild)
 
-      const styles = `
-        @page { size: A4 landscape; margin: 12mm; }
-        html, body { direction: rtl; font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Naskh Arabic, Arial, sans-serif; color: #000; }
-        body { padding: 0; }
-        h1 { font-size: 16pt; margin: 0 0 8mm; text-align: center; }
-        .meta { font-size: 10pt; margin: 0 0 6mm; text-align: center; color: #333; }
-        .content-card { box-shadow: none !important; background: #fff !important; }
-        .table-container { overflow: visible !important; }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        thead { display: table-header-group; }
-        th, td { border: 0.5pt solid #000; padding: 6pt; font-size: 10pt; }
-        th { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        tr { page-break-inside: avoid; }
-        .badge { border: none !important; background: none !important; }
-        @media print {
-          html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
-      `
+      // Add class to body to enable print overrides if needed
+      document.body.classList.add('print-ready')
 
-      const doc = printWindow.document
-      doc.open()
-      doc.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8" /><title>${title}</title><style>${styles}</style></head><body>`)
-      doc.write(`<h1>${title}</h1>`)
-      doc.write(`<div class="meta">${dateStr}</div>`)
-      doc.write(content.outerHTML)
-      doc.write('<script>window.onload=function(){window.focus(); window.print(); setTimeout(function(){ window.close(); }, 200);};<\/script>')
-      doc.write('</body></html>')
-      doc.close()
+      // Give the browser a moment to layout before printing
+      setTimeout(() => {
+        window.print()
+        // Cleanup after print
+        setTimeout(() => {
+          document.body.classList.remove('print-ready')
+          if (header && header.parentNode) header.parentNode.removeChild(header)
+        }, 0)
+      }, 50)
     } catch (err) {
       console.error('Error preparing print:', err)
       alert('حدث خطأ أثناء تجهيز صفحة الطباعة')
