@@ -372,11 +372,12 @@ function App() {
     }
   }
 
-  const handlePrintReport = () => {
-    try {
-      const table = document.querySelector('table')
-      if (!table) return
+  // Prepare PDF (export all rows)
+  const [isFullExportLoading, setIsFullExportLoading] = useState(false)
 
+  const handlePrintReport = async () => {
+    try {
+      setIsFullExportLoading(true)
       const title =
         activeTab === 'locations'
           ? 'تقرير المواقع الانتخابية'
@@ -387,50 +388,150 @@ function App() {
       const now = new Date()
       const dateStr = now.toLocaleString('ar-EG')
 
+      // Build a full table (all rows, not paginated)
+      const escape = (v) => (v == null ? '' : String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'))
+
+      const buildFullTableHTML = async () => {
+        if (activeTab === 'locations') {
+          const header = `<thead><tr>
+            <th>رقم الموقع</th><th>اسم الموقع</th><th>العنوان</th><th>عدد الناخبين</th>
+          </tr></thead>`
+          const rows = (sortedLocations || []).map(loc => 
+            `<tr>
+              <td>${escape(loc.location_number)}</td>
+              <td>${escape(loc.location_name)}</td>
+              <td>${escape(loc.location_address)}</td>
+              <td>${escape(loc.total_voters ?? 0)}</td>
+            </tr>`
+          ).join('')
+          return `<table>${header}<tbody>${rows}</tbody></table>`
+        }
+        if (activeTab === 'families') {
+          const header = `<thead><tr>
+            <th>اسم العائلة</th><th>عدد الأفراد</th><th>عدد المواقع</th>
+          </tr></thead>`
+          const rows = (sortedFamilies || []).map(fam => 
+            `<tr>
+              <td>${escape(fam.family_name)}</td>
+              <td>${escape(fam.member_count)}</td>
+              <td>${escape(fam.location_count)}</td>
+            </tr>`
+          ).join('')
+          return `<table>${header}<tbody>${rows}</tbody></table>`
+        }
+        // voters: fetch ALL matching rows in batches to avoid pagination limits
+        const batchSize = 1000
+        let from = 0
+        let all = []
+        while (true) {
+          let query = supabase
+            .from('voters')
+            .select('*, locations(location_name, location_number)')
+
+          if (selectedLocation) query = query.eq('location_id', selectedLocation)
+          if (selectedFamily) query = query.eq('family_name', selectedFamily)
+          if (searchTerm) {
+            const term = `%${searchTerm}%`
+            const isNumericSearch = !Number.isNaN(Number(searchTerm)) && searchTerm.trim() !== ''
+            if (isNumericSearch) {
+              query = query.or(`full_name.ilike.${term},first_name.ilike.${term},family_name.ilike.${term},voter_id.eq.${searchTerm}`)
+            } else {
+              query = query.or(`full_name.ilike.${term},first_name.ilike.${term},family_name.ilike.${term}`)
+            }
+          }
+
+          query = query.order('voter_id', { ascending: true }).range(from, from + batchSize - 1)
+          const { data, error } = await query
+          if (error) throw error
+          const batch = data || []
+          all = all.concat(batch)
+          if (batch.length < batchSize) break
+          from += batchSize
+        }
+        // Apply current sort order to all fetched voters
+        const sorter = (a, b) => {
+          if (!sortConfig.key) return 0
+          let aValue, bValue
+          if (sortConfig.key === 'location_name') {
+            aValue = a.locations?.location_name
+            bValue = b.locations?.location_name
+          } else if (sortConfig.key === 'location_number') {
+            aValue = a.locations?.location_number
+            bValue = b.locations?.location_number
+          } else {
+            aValue = a[sortConfig.key]
+            bValue = b[sortConfig.key]
+          }
+          if (aValue == null) return 1
+          if (bValue == null) return -1
+          if (typeof aValue === 'number' && typeof bValue === 'number') {
+            return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue
+          }
+          const aStr = String(aValue).toLowerCase()
+          const bStr = String(bValue).toLowerCase()
+          if (sortConfig.direction === 'asc') {
+            return aStr.localeCompare(bStr, 'ar')
+          } else {
+            return bStr.localeCompare(aStr, 'ar')
+          }
+        }
+        all.sort(sorter)
+
+        const rows = all.map(voter => 
+          `<tr>
+            <td>${escape(voter.voter_id)}</td>
+            <td>${escape(voter.full_name)}</td>
+            <td>${escape(voter.family_name)}</td>
+            <td>${escape(voter.locations?.location_number)}</td>
+            <td>${escape(voter.locations?.location_name)}</td>
+          </tr>`
+        ).join('')
+        const header = `<thead><tr>
+          <th>رقم الناخب</th><th>الاسم الكامل</th><th>اسم العائلة</th><th>رقم الموقع</th><th>اسم الموقع</th>
+        </tr></thead>`
+        return `<table>${header}<tbody>${rows}</tbody></table>`
+      }
+
+      const fullTableHTML = await buildFullTableHTML()
+
       // Hide the entire original UI
       const body = document.body
       const bodyChildren = Array.from(body.children)
-      bodyChildren.forEach(child => {
-        child.style.display = 'none'
-      })
+      bodyChildren.forEach(child => { child.style.display = 'none' })
 
       // Create a clean, minimal DOM structure for printing
       const printContainer = document.createElement('div')
       printContainer.className = 'print-container'
       printContainer.style.direction = 'rtl'
-      printContainer.className = 'print-container'
       printContainer.innerHTML = `
         <div class="print-header">
           <h1>${title}</h1>
           <div class="meta">${dateStr}</div>
         </div>
         <div class="table-container">
-          ${table.outerHTML}
+          ${fullTableHTML}
         </div>
       `
-      
+
       // Add the clean content to body
       body.appendChild(printContainer)
-      
+
       // Give the browser a moment to layout before printing
       setTimeout(() => {
         window.print()
-        
         // Restore original UI
         setTimeout(() => {
           body.removeChild(printContainer)
-          bodyChildren.forEach(child => {
-            child.style.display = ''
-          })
+          bodyChildren.forEach(child => { child.style.display = '' })
         }, 100)
       }, 100)
     } catch (err) {
-      console.error('Error preparing print:', err)
-      alert('حدث خطأ أثناء تجهيز صفحة الطباعة')
+      console.error('Error preparing full export print:', err)
+      alert('حدث خطأ أثناء تجهيز الطباعة الكاملة')
       // Restore UI in case of error
-      Array.from(document.body.children).forEach(child => {
-        child.style.display = ''
-      })
+      Array.from(document.body.children).forEach(child => { child.style.display = '' })
+    } finally {
+      setIsFullExportLoading(false)
     }
   }
   const handleExportExcel = () => {
@@ -531,8 +632,8 @@ function App() {
               <button className="action-button" type="button" onClick={handleExportExcel}>
                 تصدير Excel
               </button>
-              <button className="action-button" type="button" onClick={handlePrintReport}>
-                تجهيز PDF للطباعة
+              <button className="action-button" type="button" onClick={handlePrintReport} disabled={isFullExportLoading}>
+                {isFullExportLoading ? 'جاري التحميل...' : 'تجهيز PDF للطباعة'}
               </button>
               <button className="action-button primary" type="button" onClick={handlePrint}>
                 طباعة الصفحة الحالية
