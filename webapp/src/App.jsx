@@ -312,7 +312,64 @@ function App() {
   }
 
   const handlePrint = () => {
-    window.print()
+    // Apply the same clean print approach as the PDF report
+    try {
+      const content = document.querySelector('.content-card')
+      if (!content) return
+
+      const title =
+        activeTab === 'locations'
+          ? 'تقرير المواقع الانتخابية'
+          : activeTab === 'voters'
+            ? 'تقرير الناخبين'
+            : 'تقرير العائلات'
+
+      const now = new Date()
+      const dateStr = now.toLocaleString('ar-EG')
+
+      // Hide the entire original UI
+      const body = document.body
+      const bodyChildren = Array.from(body.children)
+      bodyChildren.forEach(child => {
+        child.style.display = 'none'
+      })
+
+      // Create a clean, minimal DOM structure for printing
+      const printContainer = document.createElement('div')
+      printContainer.className = 'print-container'
+      printContainer.innerHTML = `
+        <div class="print-header">
+          <h1>${title}</h1>
+          <div class="meta">${dateStr}</div>
+        </div>
+        <div class="content-card" style="padding: 0; background: white;">
+          ${content.innerHTML}
+        </div>
+      `
+      
+      // Add the clean content to body
+      body.appendChild(printContainer)
+      
+      // Give the browser a moment to layout before printing
+      setTimeout(() => {
+        window.print()
+        
+        // Restore original UI
+        setTimeout(() => {
+          body.removeChild(printContainer)
+          bodyChildren.forEach(child => {
+            child.style.display = ''
+          })
+        }, 100)
+      }, 100)
+    } catch (err) {
+      console.error('Error preparing print:', err)
+      alert('حدث خطأ أثناء تجهيز صفحة الطباعة')
+      // Restore UI in case of error
+      Array.from(document.body.children).forEach(child => {
+        child.style.display = ''
+      })
+    }
   }
 
   const handlePrintReport = () => {

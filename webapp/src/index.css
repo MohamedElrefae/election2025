@@ -387,12 +387,26 @@ tr:hover {
     margin: 0;
   }
 
-  /* Table container formatting */
+  /* Content card and container formatting */
+  .content-card { 
+    background: #ffffff !important; 
+    border: none !important; 
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  /* Hide filters and pagination within content-card for clean printing */
+  .filters, .pagination, .error, .loading {
+    display: none !important;
+  }
+  
   .table-container { 
     width: 100%;
     overflow: visible !important; 
     margin: 0 !important;
     padding: 0 !important;
+    background: #ffffff !important;
   }
   
   table { 
