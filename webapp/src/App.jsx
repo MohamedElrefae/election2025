@@ -330,14 +330,14 @@ function App() {
       const now = new Date()
       const dateStr = now.toLocaleString('ar-EG')
 
-      // Create a temporary header visible only in printn      const header = document.createElement('div')
-      header.className = 'print-header'
-      header.innerHTML = `<h1>${title}</h1><div class="meta">${dateStr}</div>`
-      content.insertBefore(header, content.firstChild)
+      // Create a temporary header visible only in print
+      const header = document.createElement('div');
+      header.className = 'print-header';
+      header.innerHTML = `<h1>${title}</h1><div class="meta">${dateStr}</div>`;
+      content.insertBefore(header, content.firstChild);
 
       // Add class to body to enable print overrides if needed
-      document.body.classList.add('print-ready')
-
+      document.body.classList.add('print-ready');
       // Give the browser a moment to layout before printing
       setTimeout(() => {
         window.print()
