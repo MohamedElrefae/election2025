@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { Users, MapPin, UsersRound } from 'lucide-react'
+import { jsPDF } from 'jspdf'
+import html2canvas from 'html2canvas'
+import * as XLSX from 'xlsx'
 
 const supabaseUrl = 'https://gridbhusfotahmgulgdd.supabase.co'
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdyaWRiaHVzZm90YWhtZ3VsZ2RkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5NDYzNDMsImV4cCI6MjA3ODUyMjM0M30.HXHXIDqepRAyi_BRnVh26rxZBlkksPd84IFH4chgdS0'
@@ -314,6 +317,156 @@ function App() {
     window.print()
   }
 
+  const handleExportPDF = async () => {
+    try {
+      const content = document.querySelector('.content-card')
+      if (!content) return
+
+      const canvas = await html2canvas(content, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      })
+
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('landscape', 'mm', 'a4')
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+
+      const marginTop = 12
+      const marginBottom = 8
+      const usableHeight = pdfHeight - marginTop - marginBottom
+
+      const imgWidth = pdfWidth
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      let heightLeft = imgHeight
+      let position = marginTop
+
+      const title =
+        activeTab === 'locations'
+          ? 'تقرير المواقع الانتخابية'
+          : activeTab === 'voters'
+            ? 'تقرير الناخبين'
+            : 'تقرير العائلات'
+
+      const now = new Date()
+      const dateStr = now.toLocaleString('ar-EG')
+
+      const drawHeaderFooter = (pageNumber) => {
+        pdf.setFontSize(12)
+        pdf.text(title, pdfWidth - 10, 8, { align: 'right' })
+        pdf.setFontSize(8)
+        pdf.text(dateStr, 10, pdfHeight - 4, { align: 'left' })
+        pdf.text(`صفحة ${pageNumber}`, pdfWidth - 10, pdfHeight - 4, { align: 'right' })
+      }
+
+      let pageNumber = 1
+      drawHeaderFooter(pageNumber)
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= usableHeight
+
+      while (heightLeft > 0) {
+        pageNumber += 1
+        pdf.addPage()
+        drawHeaderFooter(pageNumber)
+        position = marginTop + (heightLeft - imgHeight)
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= usableHeight
+      }
+
+      pdf.save(`election-${activeTab}-report.pdf`)
+    } catch (err) {
+      console.error('Error exporting PDF:', err)
+      alert('حدث خطأ أثناء تصدير ملف PDF')
+    }
+  }
+
+  const handleExportExcel = () => {
+    try {
+      const workbook = XLSX.utils.book_new()
+
+      const buildSheet = (header, rows) => {
+        const worksheet = XLSX.utils.aoa_to_sheet([header, ...rows])
+
+        // Auto column widths based on Arabic content length
+        const colWidths = header.map((_, colIndex) => {
+          const headerLen = header[colIndex] ? header[colIndex].toString().length : 0
+          const maxCellLen = rows.reduce((max, row) => {
+            const cell = row[colIndex]
+            const len = cell != null ? cell.toString().length : 0
+            return Math.max(max, len)
+          }, 0)
+          const maxLen = Math.max(headerLen, maxCellLen)
+          return { wch: Math.min(Math.max(maxLen + 2, 10), 40) }
+        })
+        worksheet['!cols'] = colWidths
+
+        // Enable filters on header row
+        const columnLetter = (colIndex) => {
+          let letter = ''
+          let n = colIndex + 1
+          while (n > 0) {
+            const rem = (n - 1) % 26
+            letter = String.fromCharCode(65 + rem) + letter
+            n = Math.floor((n - 1) / 26)
+          }
+          return letter
+        }
+
+        const lastColLetter = columnLetter(header.length - 1)
+        const lastRowIndex = rows.length + 1 // including header
+        worksheet['!autofilter'] = { ref: `A1:${lastColLetter}${lastRowIndex}` }
+
+        return worksheet
+      }
+
+      // المواقع sheet
+      if (sortedLocations.length > 0) {
+        const header = ['رقم الموقع', 'اسم الموقع', 'العنوان', 'عدد الناخبين']
+        const rows = sortedLocations.map(loc => [
+          loc.location_number,
+          loc.location_name,
+          loc.location_address,
+          loc.total_voters ?? 0
+        ])
+        const wsLocations = buildSheet(header, rows)
+        XLSX.utils.book_append_sheet(workbook, wsLocations, 'المواقع')
+      }
+
+      // الناخبين sheet (current loaded voters)
+      if (sortedVoters.length > 0) {
+        const header = ['رقم الناخب', 'الاسم الكامل', 'اسم العائلة', 'رقم الموقع', 'اسم الموقع']
+        const rows = sortedVoters.map(voter => [
+          voter.voter_id,
+          voter.full_name,
+          voter.family_name,
+          voter.locations?.location_number,
+          voter.locations?.location_name
+        ])
+        const wsVoters = buildSheet(header, rows)
+        XLSX.utils.book_append_sheet(workbook, wsVoters, 'الناخبين')
+      }
+
+      // العائلات sheet
+      if (sortedFamilies.length > 0) {
+        const header = ['اسم العائلة', 'عدد الأفراد', 'عدد المواقع']
+        const rows = sortedFamilies.map(fam => [
+          fam.family_name,
+          fam.member_count,
+          fam.location_count
+        ])
+        const wsFamilies = buildSheet(header, rows)
+        XLSX.utils.book_append_sheet(workbook, wsFamilies, 'العائلات')
+      }
+
+      XLSX.writeFile(workbook, 'election-report.xlsx')
+    } catch (err) {
+      console.error('Error exporting Excel:', err)
+      alert('حدث خطأ أثناء تصدير ملف Excel')
+    }
+  }
+
   return (
     <div className="app">
       <div className="container">
@@ -323,9 +476,17 @@ function App() {
               <h1>🗳️ إدارة بيانات الانتخابات - مطوبس 2025</h1>
               <p>نظام إدارة قاعدة بيانات الناخبين - محافظة كفر الشيخ</p>
             </div>
-            <button className="print-button" type="button" onClick={handlePrint}>
-              طباعة الصفحة الحالية
-            </button>
+            <div className="header-buttons">
+              <button className="action-button" type="button" onClick={handleExportExcel}>
+                تصدير Excel
+              </button>
+              <button className="action-button" type="button" onClick={handleExportPDF}>
+                تصدير PDF
+              </button>
+              <button className="action-button primary" type="button" onClick={handlePrint}>
+                طباعة الصفحة الحالية
+              </button>
+            </div>
           </div>
         </div>
 
