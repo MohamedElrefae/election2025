@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { Users, MapPin, UsersRound } from 'lucide-react'
-import { jsPDF } from 'jspdf'
-import html2canvas from 'html2canvas'
 import * as XLSX from 'xlsx'
 
 const supabaseUrl = 'https://gridbhusfotahmgulgdd.supabase.co'
@@ -317,31 +315,10 @@ function App() {
     window.print()
   }
 
-  const handleExportPDF = async () => {
+  const handlePrintReport = () => {
     try {
       const content = document.querySelector('.content-card')
       if (!content) return
-
-      const canvas = await html2canvas(content, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      })
-
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF('landscape', 'mm', 'a4')
-      const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = pdf.internal.pageSize.getHeight()
-
-      const marginTop = 12
-      const marginBottom = 8
-      const usableHeight = pdfHeight - marginTop - marginBottom
-
-      const imgWidth = pdfWidth
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-      let heightLeft = imgHeight
-      let position = marginTop
 
       const title =
         activeTab === 'locations'
@@ -353,32 +330,40 @@ function App() {
       const now = new Date()
       const dateStr = now.toLocaleString('ar-EG')
 
-      const drawHeaderFooter = (pageNumber) => {
-        pdf.setFontSize(12)
-        pdf.text(title, pdfWidth - 10, 8, { align: 'right' })
-        pdf.setFontSize(8)
-        pdf.text(dateStr, 10, pdfHeight - 4, { align: 'left' })
-        pdf.text(`صفحة ${pageNumber}`, pdfWidth - 10, pdfHeight - 4, { align: 'right' })
-      }
+      const printWindow = window.open('', '_blank', 'noopener,noreferrer')
+      if (!printWindow) return
 
-      let pageNumber = 1
-      drawHeaderFooter(pageNumber)
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= usableHeight
+      const styles = `
+        @page { size: A4 landscape; margin: 12mm; }
+        html, body { direction: rtl; font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Naskh Arabic, Arial, sans-serif; color: #000; }
+        body { padding: 0; }
+        h1 { font-size: 16pt; margin: 0 0 8mm; text-align: center; }
+        .meta { font-size: 10pt; margin: 0 0 6mm; text-align: center; color: #333; }
+        .content-card { box-shadow: none !important; background: #fff !important; }
+        .table-container { overflow: visible !important; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        thead { display: table-header-group; }
+        th, td { border: 0.5pt solid #000; padding: 6pt; font-size: 10pt; }
+        th { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tr { page-break-inside: avoid; }
+        .badge { border: none !important; background: none !important; }
+        @media print {
+          html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+      `
 
-      while (heightLeft > 0) {
-        pageNumber += 1
-        pdf.addPage()
-        drawHeaderFooter(pageNumber)
-        position = marginTop + (heightLeft - imgHeight)
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= usableHeight
-      }
-
-      pdf.save(`election-${activeTab}-report.pdf`)
+      const doc = printWindow.document
+      doc.open()
+      doc.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8" /><title>${title}</title><style>${styles}</style></head><body>`)
+      doc.write(`<h1>${title}</h1>`)
+      doc.write(`<div class="meta">${dateStr}</div>`)
+      doc.write(content.outerHTML)
+      doc.write('<script>window.onload=function(){window.focus(); window.print(); setTimeout(function(){ window.close(); }, 200);};<\/script>')
+      doc.write('</body></html>')
+      doc.close()
     } catch (err) {
-      console.error('Error exporting PDF:', err)
-      alert('حدث خطأ أثناء تصدير ملف PDF')
+      console.error('Error preparing print:', err)
+      alert('حدث خطأ أثناء تجهيز صفحة الطباعة')
     }
   }
 
@@ -480,8 +465,8 @@ function App() {
               <button className="action-button" type="button" onClick={handleExportExcel}>
                 تصدير Excel
               </button>
-              <button className="action-button" type="button" onClick={handleExportPDF}>
-                تصدير PDF
+              <button className="action-button" type="button" onClick={handlePrintReport}>
+                تجهيز PDF للطباعة
               </button>
               <button className="action-button primary" type="button" onClick={handlePrint}>
                 طباعة الصفحة الحالية
