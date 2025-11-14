@@ -22,6 +22,8 @@ function App() {
   const [printSettings, setPrintSettings] = useState({
     fontSize: 'medium', // 'small' | 'medium' | 'large'
     widthMode: 'normal', // 'compact' | 'normal' | 'wide'
+    // Optional precise font size in pt (if filled, overrides fontSize)
+    customFontSize: '',
     columns: {
       locations: {
         number: true,
@@ -40,6 +42,27 @@ function App() {
         familyName: true,
         memberCount: true,
         locationCount: true
+      }
+    },
+    // Optional per-column width percentages per tab (e.g. 25 = 25%)
+    customColumnWidths: {
+      locations: {
+        number: '',
+        name: '',
+        address: '',
+        votersCount: ''
+      },
+      voters: {
+        voterId: '',
+        fullName: '',
+        familyName: '',
+        locationNumber: '',
+        locationName: ''
+      },
+      families: {
+        familyName: '',
+        memberCount: '',
+        locationCount: ''
       }
     }
   })
@@ -367,18 +390,27 @@ function App() {
   const buildPrintTableHTML = (tabKey, rows, settings) => {
     const defs = columnDefs[tabKey] || []
     const tabColumns = settings.columns[tabKey] || {}
+    const tabCustomWidths = settings.customColumnWidths?.[tabKey] || {}
     const activeCols = defs.filter(col => tabColumns[col.key] !== false)
     if (activeCols.length === 0) {
       return '<div>لا توجد أعمدة محددة للطباعة</div>'
     }
 
     const headerHtml = '<thead><tr>' +
-      activeCols.map(col => `<th class="${col.className}">${escapeHtml(col.label)}</th>`).join('') +
+      activeCols.map(col => {
+        const width = tabCustomWidths[col.key]
+        const widthAttr = width ? ` style=\"width:${width}%\"` : ''
+        return `<th class=\"${col.className}\"${widthAttr}>${escapeHtml(col.label)}</th>`
+      }).join('') +
       '</tr></thead>'
 
     const bodyHtml = (rows || []).map(row =>
       '<tr>' +
-      activeCols.map(col => `<td class="${col.className}">${escapeHtml(col.value(row))}</td>`).join('') +
+      activeCols.map(col => {
+        const width = tabCustomWidths[col.key]
+        const widthAttr = width ? ` style=\"width:${width}%\"` : ''
+        return `<td class=\"${col.className}\"${widthAttr}>${escapeHtml(col.value(row))}</td>`
+      }).join('') +
       '</tr>'
     ).join('')
 
@@ -403,8 +435,16 @@ function App() {
     bodyChildren.forEach(child => { child.style.display = 'none' })
 
     const printContainer = document.createElement('div')
-    printContainer.className = `print-container print-size-${printSettings.fontSize} print-width-${printSettings.widthMode}`
+    const sizeClass = printSettings.customFontSize ? 'print-size-custom' : `print-size-${printSettings.fontSize}`
+    printContainer.className = `print-container ${sizeClass} print-width-${printSettings.widthMode}`
     printContainer.style.direction = 'rtl'
+
+    if (printSettings.customFontSize) {
+      const numeric = Number(printSettings.customFontSize)
+      if (!Number.isNaN(numeric) && numeric > 0) {
+        printContainer.style.setProperty('--print-font-size', `${numeric}pt`)
+      }
+    }
     printContainer.innerHTML = `
       <div class="print-header">
         <h1>${title}</h1>
@@ -657,6 +697,16 @@ function App() {
               <option value="medium">متوسط</option>
               <option value="large">كبير</option>
             </select>
+            <span className="print-settings-label" style={{ marginInlineStart: 8 }}>أو حجم مخصص (نقطة):</span>
+            <input
+              type="number"
+              min="6"
+              max="24"
+              className="print-settings-width-input"
+              placeholder="مثال 12"
+              value={printSettings.customFontSize}
+              onChange={(e) => setPrintSettings(prev => ({ ...prev, customFontSize: e.target.value }))}
+            />
           </div>
           <div className="print-settings-row">
             <label className="print-settings-label">عرض الأعمدة:</label>
@@ -693,6 +743,27 @@ function App() {
                     }}
                   />
                   <span>{col.label}</span>
+                  <input
+                    type="number"
+                    min="5"
+                    max="80"
+                    className="print-settings-width-input"
+                    placeholder="% عرض"
+                    value={printSettings.customColumnWidths[activeTab][col.key] ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setPrintSettings(prev => ({
+                        ...prev,
+                        customColumnWidths: {
+                          ...prev.customColumnWidths,
+                          [activeTab]: {
+                            ...prev.customColumnWidths[activeTab],
+                            [col.key]: value
+                          }
+                        }
+                      }))
+                    }}
+                  />
                 </label>
               ))}
             </div>

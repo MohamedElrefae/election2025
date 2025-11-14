@@ -124,6 +124,16 @@ body {
   cursor: pointer;
 }
 
+.print-settings-width-input {
+  width: 70px;
+  padding: 4px 6px;
+  font-size: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  direction: ltr;
+  text-align: center;
+}
+
 .stat-card {
   background: white;
   border-radius: 12px;
@@ -480,6 +490,13 @@ tr:hover {
   .print-size-large th,
   .print-size-large td {
     font-size: 13pt;
+  }
+
+  /* Custom font size (uses CSS variable set from JS) */
+  .print-size-custom table,
+  .print-size-custom th,
+  .print-size-custom td {
+    font-size: var(--print-font-size, 11pt);
   }
   
   /* Ensure table headers repeat on each page */
