@@ -317,8 +317,8 @@ function App() {
 
   const handlePrintReport = () => {
     try {
-      const content = document.querySelector('.content-card')
-      if (!content) return
+      const table = document.querySelector('table')
+      if (!table) return
 
       const title =
         activeTab === 'locations'
@@ -330,29 +330,52 @@ function App() {
       const now = new Date()
       const dateStr = now.toLocaleString('ar-EG')
 
-      // Create a temporary header visible only in print
-      const header = document.createElement('div');
-      header.className = 'print-header';
-      header.innerHTML = `<h1>${title}</h1><div class="meta">${dateStr}</div>`;
-      content.insertBefore(header, content.firstChild);
+      // Hide the entire original UI
+      const body = document.body
+      const bodyChildren = Array.from(body.children)
+      bodyChildren.forEach(child => {
+        child.style.display = 'none'
+      })
 
-      // Add class to body to enable print overrides if needed
-      document.body.classList.add('print-ready');
+      // Create a clean, minimal DOM structure for printing
+      const printContainer = document.createElement('div')
+      printContainer.className = 'print-container'
+      printContainer.style.direction = 'rtl'
+      printContainer.className = 'print-container'
+      printContainer.innerHTML = `
+        <div class="print-header">
+          <h1>${title}</h1>
+          <div class="meta">${dateStr}</div>
+        </div>
+        <div class="table-container">
+          ${table.outerHTML}
+        </div>
+      `
+      
+      // Add the clean content to body
+      body.appendChild(printContainer)
+      
       // Give the browser a moment to layout before printing
       setTimeout(() => {
         window.print()
-        // Cleanup after print
+        
+        // Restore original UI
         setTimeout(() => {
-          document.body.classList.remove('print-ready')
-          if (header && header.parentNode) header.parentNode.removeChild(header)
-        }, 0)
-      }, 50)
+          body.removeChild(printContainer)
+          bodyChildren.forEach(child => {
+            child.style.display = ''
+          })
+        }, 100)
+      }, 100)
     } catch (err) {
       console.error('Error preparing print:', err)
       alert('حدث خطأ أثناء تجهيز صفحة الطباعة')
+      // Restore UI in case of error
+      Array.from(document.body.children).forEach(child => {
+        child.style.display = ''
+      })
     }
   }
-
   const handleExportExcel = () => {
     try {
       const workbook = XLSX.utils.book_new()
