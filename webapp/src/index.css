@@ -77,6 +77,53 @@ body {
   margin-bottom: 30px;
 }
 
+/* Print settings panel (screen only) */
+.print-settings {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: flex-start;
+}
+
+.print-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.print-settings-label {
+  font-size: 0.875rem;
+  color: #4a5568;
+  white-space: nowrap;
+}
+
+.print-settings-select {
+  min-width: 140px;
+}
+
+.print-settings-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.print-settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #4a5568;
+}
+
+.print-settings-checkbox input {
+  cursor: pointer;
+}
+
 .stat-card {
   background: white;
   border-radius: 12px;
@@ -335,11 +382,16 @@ tr:hover {
   .stats-grid {
     grid-template-columns: 1fr;
   }
+
+  .print-settings {
+    flex-direction: column;
+  }
 }
 
 /* Print-specific styles */
 @media print {
-  @page { size: A4 landscape; margin: 8mm; }
+  /* Slightly smaller margins to give more horizontal space */
+  @page { size: A4 landscape; margin: 6mm; }
 
   html, body { 
     direction: rtl; 
@@ -372,17 +424,17 @@ tr:hover {
   .print-header { 
     display: block !important; 
     text-align: center; 
-    margin: 0 0 8mm 0;
+    margin: 0 0 6mm 0;
     page-break-after: avoid;
   }
   .print-header h1 { 
-    font-size: 14pt; 
+    font-size: 16pt; 
     margin: 0 0 2mm 0;
     font-weight: bold;
     color: #000000 !important;
   }
   .print-header .meta { 
-    font-size: 10pt; 
+    font-size: 11pt; 
     color: #000000;
     margin: 0;
   }
@@ -400,7 +452,7 @@ tr:hover {
   .filters, .pagination, .error, .loading {
     display: none !important;
   }
-  
+
   .table-container { 
     width: 100%;
     overflow: visible !important; 
@@ -412,9 +464,22 @@ tr:hover {
   table { 
     width: 100%; 
     border-collapse: collapse; 
-    table-layout: auto;
-    font-size: 9pt;
+    table-layout: fixed;
+    font-size: 11pt;            /* default (medium) */
     border: 1pt solid #000;
+  }
+
+  /* Font size modes */
+  .print-size-small table,
+  .print-size-small th,
+  .print-size-small td {
+    font-size: 9pt;
+  }
+
+  .print-size-large table,
+  .print-size-large th,
+  .print-size-large td {
+    font-size: 13pt;
   }
   
   /* Ensure table headers repeat on each page */
@@ -428,20 +493,26 @@ tr:hover {
     -webkit-print-color-adjust: exact; 
     print-color-adjust: exact;
     border: 0.5pt solid #000;
-    padding: 6pt;
+    padding: 8pt 6pt;           /* Slightly larger padding */
     text-align: center;
     font-weight: bold;
-    font-size: 9pt;
+    font-size: 11pt;            /* Match body font size */
+    line-height: 1.4;
     color: #000000 !important;
+    white-space: normal;
+    word-wrap: break-word;
   }
   
   td { 
     border: 0.5pt solid #000;
-    padding: 6pt;
+    padding: 8pt 6pt;
     text-align: right;
     vertical-align: top;
-    font-size: 9pt;
+    font-size: 11pt;
+    line-height: 1.4;
     color: #000000 !important;
+    white-space: normal;        /* Allow text to wrap */
+    word-wrap: break-word;
   }
   
   tr { 
@@ -455,5 +526,63 @@ tr:hover {
     padding: 0 !important;
     font-weight: normal !important;
     color: #000000 !important;
+  }
+
+  /* Width modes for location table */
+  .print-width-compact .print-table-locations .col-location-number,
+  .print-width-normal .print-table-locations .col-location-number,
+  .print-width-wide   .print-table-locations .col-location-number {
+    width: 8%;
+  }
+  .print-width-compact .print-table-locations .col-location-name { width: 18%; }
+  .print-width-normal  .print-table-locations .col-location-name { width: 22%; }
+  .print-width-wide    .print-table-locations .col-location-name { width: 26%; }
+
+  .print-width-compact .print-table-locations .col-location-address { width: 34%; }
+  .print-width-normal  .print-table-locations .col-location-address { width: 40%; }
+  .print-width-wide    .print-table-locations .col-location-address { width: 50%; }
+
+  .print-width-compact .print-table-locations .col-location-voters,
+  .print-width-normal  .print-table-locations .col-location-voters,
+  .print-width-wide    .print-table-locations .col-location-voters {
+    width: 10%;
+  }
+
+  /* Width modes for voters table */
+  .print-width-compact .print-table-voters .col-voter-id { width: 10%; }
+  .print-width-normal  .print-table-voters .col-voter-id { width: 12%; }
+  .print-width-wide    .print-table-voters .col-voter-id { width: 14%; }
+
+  .print-width-compact .print-table-voters .col-voter-full-name { width: 20%; }
+  .print-width-normal  .print-table-voters .col-voter-full-name { width: 26%; }
+  .print-width-wide    .print-table-voters .col-voter-full-name { width: 32%; }
+
+  .print-width-compact .print-table-voters .col-voter-family-name { width: 16%; }
+  .print-width-normal  .print-table-voters .col-voter-family-name { width: 18%; }
+  .print-width-wide    .print-table-voters .col-voter-family-name { width: 20%; }
+
+  .print-width-compact .print-table-voters .col-voter-location-number { width: 12%; }
+  .print-width-normal  .print-table-voters .col-voter-location-number { width: 12%; }
+  .print-width-wide    .print-table-voters .col-voter-location-number { width: 12%; }
+
+  .print-width-compact .print-table-voters .col-voter-location-name { width: 18%; }
+  .print-width-normal  .print-table-voters .col-voter-location-name { width: 22%; }
+  .print-width-wide    .print-table-voters .col-voter-location-name { width: 26%; }
+
+  /* Width modes for families table */
+  .print-width-compact .print-table-families .col-family-name { width: 40%; }
+  .print-width-normal  .print-table-families .col-family-name { width: 45%; }
+  .print-width-wide    .print-table-families .col-family-name { width: 55%; }
+
+  .print-width-compact .print-table-families .col-family-members,
+  .print-width-normal  .print-table-families .col-family-members,
+  .print-width-wide    .print-table-families .col-family-members {
+    width: 15%;
+  }
+
+  .print-width-compact .print-table-families .col-family-locations,
+  .print-width-normal  .print-table-families .col-family-locations,
+  .print-width-wide    .print-table-families .col-family-locations {
+    width: 15%;
   }
 }

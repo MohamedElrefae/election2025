@@ -17,6 +17,32 @@ function App() {
   const [votersTotal, setVotersTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  // Print settings for font size, width mode and visible columns
+  const [printSettings, setPrintSettings] = useState({
+    fontSize: 'medium', // 'small' | 'medium' | 'large'
+    widthMode: 'normal', // 'compact' | 'normal' | 'wide'
+    columns: {
+      locations: {
+        number: true,
+        name: true,
+        address: true,
+        votersCount: true
+      },
+      voters: {
+        voterId: true,
+        fullName: true,
+        familyName: true,
+        locationNumber: true,
+        locationName: true
+      },
+      families: {
+        familyName: true,
+        memberCount: true,
+        locationCount: true
+      }
+    }
+  })
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
@@ -311,64 +337,112 @@ function App() {
     return sortConfig.direction === 'asc' ? ' ↑' : ' ↓'
   }
 
-  const handlePrint = () => {
-    // Apply the same clean print approach as the PDF report
-    try {
-      const content = document.querySelector('.content-card')
-      if (!content) return
+  // ---- Print helpers ----
+  const escapeHtml = (v) => (v == null ? '' : String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;'))
 
-      const title =
-        activeTab === 'locations'
-          ? 'تقرير المواقع الانتخابية'
-          : activeTab === 'voters'
-            ? 'تقرير الناخبين'
-            : 'تقرير العائلات'
+  const columnDefs = {
+    locations: [
+      { key: 'number', label: 'رقم الموقع', className: 'col-location-number', value: (row) => row.location_number },
+      { key: 'name', label: 'اسم الموقع', className: 'col-location-name', value: (row) => row.location_name },
+      { key: 'address', label: 'العنوان', className: 'col-location-address', value: (row) => row.location_address },
+      { key: 'votersCount', label: 'عدد الناخبين', className: 'col-location-voters', value: (row) => row.total_voters ?? 0 }
+    ],
+    voters: [
+      { key: 'voterId', label: 'رقم الناخب', className: 'col-voter-id', value: (row) => row.voter_id },
+      { key: 'fullName', label: 'الاسم الكامل', className: 'col-voter-full-name', value: (row) => row.full_name },
+      { key: 'familyName', label: 'اسم العائلة', className: 'col-voter-family-name', value: (row) => row.family_name },
+      { key: 'locationNumber', label: 'رقم الموقع', className: 'col-voter-location-number', value: (row) => row.locations?.location_number },
+      { key: 'locationName', label: 'اسم الموقع', className: 'col-voter-location-name', value: (row) => row.locations?.location_name }
+    ],
+    families: [
+      { key: 'familyName', label: 'اسم العائلة', className: 'col-family-name', value: (row) => row.family_name },
+      { key: 'memberCount', label: 'عدد الأفراد', className: 'col-family-members', value: (row) => row.member_count },
+      { key: 'locationCount', label: 'عدد المواقع', className: 'col-family-locations', value: (row) => row.location_count }
+    ]
+  }
 
-      const now = new Date()
-      const dateStr = now.toLocaleString('ar-EG')
+  const buildPrintTableHTML = (tabKey, rows, settings) => {
+    const defs = columnDefs[tabKey] || []
+    const tabColumns = settings.columns[tabKey] || {}
+    const activeCols = defs.filter(col => tabColumns[col.key] !== false)
+    if (activeCols.length === 0) {
+      return '<div>لا توجد أعمدة محددة للطباعة</div>'
+    }
 
-      // Hide the entire original UI
-      const body = document.body
-      const bodyChildren = Array.from(body.children)
-      bodyChildren.forEach(child => {
-        child.style.display = 'none'
-      })
+    const headerHtml = '<thead><tr>' +
+      activeCols.map(col => `<th class="${col.className}">${escapeHtml(col.label)}</th>`).join('') +
+      '</tr></thead>'
 
-      // Create a clean, minimal DOM structure for printing
-      const printContainer = document.createElement('div')
-      printContainer.className = 'print-container'
-      printContainer.innerHTML = `
-        <div class="print-header">
-          <h1>${title}</h1>
-          <div class="meta">${dateStr}</div>
-        </div>
-        <div class="content-card" style="padding: 0; background: white;">
-          ${content.innerHTML}
-        </div>
-      `
-      
-      // Add the clean content to body
-      body.appendChild(printContainer)
-      
-      // Give the browser a moment to layout before printing
+    const bodyHtml = (rows || []).map(row =>
+      '<tr>' +
+      activeCols.map(col => `<td class="${col.className}">${escapeHtml(col.value(row))}</td>`).join('') +
+      '</tr>'
+    ).join('')
+
+    return `<table class="print-table print-table-${tabKey}">${headerHtml}<tbody>${bodyHtml}</tbody></table>`
+  }
+
+  const getPrintTitle = () => (
+    activeTab === 'locations'
+      ? 'تقرير المواقع الانتخابية'
+      : activeTab === 'voters'
+        ? 'تقرير الناخبين'
+        : 'تقرير العائلات'
+  )
+
+  const printHtmlTable = (tableHtml) => {
+    const title = getPrintTitle()
+    const now = new Date()
+    const dateStr = now.toLocaleString('ar-EG')
+
+    const body = document.body
+    const bodyChildren = Array.from(body.children)
+    bodyChildren.forEach(child => { child.style.display = 'none' })
+
+    const printContainer = document.createElement('div')
+    printContainer.className = `print-container print-size-${printSettings.fontSize} print-width-${printSettings.widthMode}`
+    printContainer.style.direction = 'rtl'
+    printContainer.innerHTML = `
+      <div class="print-header">
+        <h1>${title}</h1>
+        <div class="meta">${dateStr}</div>
+      </div>
+      <div class="table-container">
+        ${tableHtml}
+      </div>
+    `
+
+    body.appendChild(printContainer)
+
+    setTimeout(() => {
+      window.print()
       setTimeout(() => {
-        window.print()
-        
-        // Restore original UI
-        setTimeout(() => {
-          body.removeChild(printContainer)
-          bodyChildren.forEach(child => {
-            child.style.display = ''
-          })
-        }, 100)
+        body.removeChild(printContainer)
+        bodyChildren.forEach(child => { child.style.display = '' })
       }, 100)
+    }, 100)
+  }
+
+  const handlePrint = () => {
+    try {
+      let rowsForPage = []
+      if (activeTab === 'locations') {
+        rowsForPage = paginatedLocations
+      } else if (activeTab === 'families') {
+        rowsForPage = paginatedFamilies
+      } else {
+        rowsForPage = paginatedVoters
+      }
+
+      const tableHtml = buildPrintTableHTML(activeTab, rowsForPage, printSettings)
+      printHtmlTable(tableHtml)
     } catch (err) {
       console.error('Error preparing print:', err)
       alert('حدث خطأ أثناء تجهيز صفحة الطباعة')
-      // Restore UI in case of error
-      Array.from(document.body.children).forEach(child => {
-        child.style.display = ''
-      })
+      Array.from(document.body.children).forEach(child => { child.style.display = '' })
     }
   }
 
@@ -378,162 +452,90 @@ function App() {
   const handlePrintReport = async () => {
     try {
       setIsFullExportLoading(true)
-      const title =
-        activeTab === 'locations'
-          ? 'تقرير المواقع الانتخابية'
-          : activeTab === 'voters'
-            ? 'تقرير الناخبين'
-            : 'تقرير العائلات'
 
-      const now = new Date()
-      const dateStr = now.toLocaleString('ar-EG')
-
-      // Build a full table (all rows, not paginated)
-      const escape = (v) => (v == null ? '' : String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'))
-
-      const buildFullTableHTML = async () => {
-        if (activeTab === 'locations') {
-          const header = `<thead><tr>
-            <th>رقم الموقع</th><th>اسم الموقع</th><th>العنوان</th><th>عدد الناخبين</th>
-          </tr></thead>`
-          const rows = (sortedLocations || []).map(loc => 
-            `<tr>
-              <td>${escape(loc.location_number)}</td>
-              <td>${escape(loc.location_name)}</td>
-              <td>${escape(loc.location_address)}</td>
-              <td>${escape(loc.total_voters ?? 0)}</td>
-            </tr>`
-          ).join('')
-          return `<table>${header}<tbody>${rows}</tbody></table>`
-        }
-        if (activeTab === 'families') {
-          const header = `<thead><tr>
-            <th>اسم العائلة</th><th>عدد الأفراد</th><th>عدد المواقع</th>
-          </tr></thead>`
-          const rows = (sortedFamilies || []).map(fam => 
-            `<tr>
-              <td>${escape(fam.family_name)}</td>
-              <td>${escape(fam.member_count)}</td>
-              <td>${escape(fam.location_count)}</td>
-            </tr>`
-          ).join('')
-          return `<table>${header}<tbody>${rows}</tbody></table>`
-        }
-        // voters: fetch ALL matching rows in batches to avoid pagination limits
-        const batchSize = 1000
-        let from = 0
-        let all = []
-        while (true) {
-          let query = supabase
-            .from('voters')
-            .select('*, locations(location_name, location_number)')
-
-          if (selectedLocation) query = query.eq('location_id', selectedLocation)
-          if (selectedFamily) query = query.eq('family_name', selectedFamily)
-          if (searchTerm) {
-            const term = `%${searchTerm}%`
-            const isNumericSearch = !Number.isNaN(Number(searchTerm)) && searchTerm.trim() !== ''
-            if (isNumericSearch) {
-              query = query.or(`full_name.ilike.${term},first_name.ilike.${term},family_name.ilike.${term},voter_id.eq.${searchTerm}`)
-            } else {
-              query = query.or(`full_name.ilike.${term},first_name.ilike.${term},family_name.ilike.${term}`)
-            }
-          }
-
-          query = query.order('voter_id', { ascending: true }).range(from, from + batchSize - 1)
-          const { data, error } = await query
-          if (error) throw error
-          const batch = data || []
-          all = all.concat(batch)
-          if (batch.length < batchSize) break
-          from += batchSize
-        }
-        // Apply current sort order to all fetched voters
-        const sorter = (a, b) => {
-          if (!sortConfig.key) return 0
-          let aValue, bValue
-          if (sortConfig.key === 'location_name') {
-            aValue = a.locations?.location_name
-            bValue = b.locations?.location_name
-          } else if (sortConfig.key === 'location_number') {
-            aValue = a.locations?.location_number
-            bValue = b.locations?.location_number
-          } else {
-            aValue = a[sortConfig.key]
-            bValue = b[sortConfig.key]
-          }
-          if (aValue == null) return 1
-          if (bValue == null) return -1
-          if (typeof aValue === 'number' && typeof bValue === 'number') {
-            return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue
-          }
-          const aStr = String(aValue).toLowerCase()
-          const bStr = String(bValue).toLowerCase()
-          if (sortConfig.direction === 'asc') {
-            return aStr.localeCompare(bStr, 'ar')
-          } else {
-            return bStr.localeCompare(aStr, 'ar')
-          }
-        }
-        all.sort(sorter)
-
-        const rows = all.map(voter => 
-          `<tr>
-            <td>${escape(voter.voter_id)}</td>
-            <td>${escape(voter.full_name)}</td>
-            <td>${escape(voter.family_name)}</td>
-            <td>${escape(voter.locations?.location_number)}</td>
-            <td>${escape(voter.locations?.location_name)}</td>
-          </tr>`
-        ).join('')
-        const header = `<thead><tr>
-          <th>رقم الناخب</th><th>الاسم الكامل</th><th>اسم العائلة</th><th>رقم الموقع</th><th>اسم الموقع</th>
-        </tr></thead>`
-        return `<table>${header}<tbody>${rows}</tbody></table>`
+      if (activeTab === 'locations') {
+        const tableHtml = buildPrintTableHTML('locations', sortedLocations, printSettings)
+        printHtmlTable(tableHtml)
+        return
       }
 
-      const fullTableHTML = await buildFullTableHTML()
+      if (activeTab === 'families') {
+        const tableHtml = buildPrintTableHTML('families', sortedFamilies, printSettings)
+        printHtmlTable(tableHtml)
+        return
+      }
 
-      // Hide the entire original UI
-      const body = document.body
-      const bodyChildren = Array.from(body.children)
-      bodyChildren.forEach(child => { child.style.display = 'none' })
+      // voters: fetch ALL matching rows in batches to avoid pagination limits
+      const batchSize = 1000
+      let from = 0
+      let all = []
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        let query = supabase
+          .from('voters')
+          .select('*, locations(location_name, location_number)')
 
-      // Create a clean, minimal DOM structure for printing
-      const printContainer = document.createElement('div')
-      printContainer.className = 'print-container'
-      printContainer.style.direction = 'rtl'
-      printContainer.innerHTML = `
-        <div class="print-header">
-          <h1>${title}</h1>
-          <div class="meta">${dateStr}</div>
-        </div>
-        <div class="table-container">
-          ${fullTableHTML}
-        </div>
-      `
+        if (selectedLocation) query = query.eq('location_id', selectedLocation)
+        if (selectedFamily) query = query.eq('family_name', selectedFamily)
+        if (searchTerm) {
+          const term = `%${searchTerm}%`
+          const isNumericSearch = !Number.isNaN(Number(searchTerm)) && searchTerm.trim() !== ''
+          if (isNumericSearch) {
+            query = query.or(`full_name.ilike.${term},first_name.ilike.${term},family_name.ilike.${term},voter_id.eq.${searchTerm}`)
+          } else {
+            query = query.or(`full_name.ilike.${term},first_name.ilike.${term},family_name.ilike.${term}`)
+          }
+        }
 
-      // Add the clean content to body
-      body.appendChild(printContainer)
+        query = query.order('voter_id', { ascending: true }).range(from, from + batchSize - 1)
+        const { data, error } = await query
+        if (error) throw error
+        const batch = data || []
+        all = all.concat(batch)
+        if (batch.length < batchSize) break
+        from += batchSize
+      }
 
-      // Give the browser a moment to layout before printing
-      setTimeout(() => {
-        window.print()
-        // Restore original UI
-        setTimeout(() => {
-          body.removeChild(printContainer)
-          bodyChildren.forEach(child => { child.style.display = '' })
-        }, 100)
-      }, 100)
+      // Apply current sort order to all fetched voters
+      const sorter = (a, b) => {
+        if (!sortConfig.key) return 0
+        let aValue, bValue
+        if (sortConfig.key === 'location_name') {
+          aValue = a.locations?.location_name
+          bValue = b.locations?.location_name
+        } else if (sortConfig.key === 'location_number') {
+          aValue = a.locations?.location_number
+          bValue = b.locations?.location_number
+        } else {
+          aValue = a[sortConfig.key]
+          bValue = b[sortConfig.key]
+        }
+        if (aValue == null) return 1
+        if (bValue == null) return -1
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue
+        }
+        const aStr = String(aValue).toLowerCase()
+        const bStr = String(bValue).toLowerCase()
+        if (sortConfig.direction === 'asc') {
+          return aStr.localeCompare(bStr, 'ar')
+        } else {
+          return bStr.localeCompare(aStr, 'ar')
+        }
+      }
+      all.sort(sorter)
+
+      const tableHtml = buildPrintTableHTML('voters', all, printSettings)
+      printHtmlTable(tableHtml)
     } catch (err) {
       console.error('Error preparing full export print:', err)
       alert('حدث خطأ أثناء تجهيز الطباعة الكاملة')
-      // Restore UI in case of error
       Array.from(document.body.children).forEach(child => { child.style.display = '' })
     } finally {
       setIsFullExportLoading(false)
     }
   }
+
   const handleExportExcel = () => {
     try {
       const workbook = XLSX.utils.book_new()
@@ -633,11 +635,66 @@ function App() {
                 تصدير Excel
               </button>
               <button className="action-button" type="button" onClick={handlePrintReport} disabled={isFullExportLoading}>
-                {isFullExportLoading ? 'جاري التحميل...' : 'تجهيز PDF للطباعة'}
+                {isFullExportLoading ? 'جاري تجهيز التقرير الكامل...' : 'تجهيز PDF للطباعة (كل البيانات)'}
               </button>
               <button className="action-button primary" type="button" onClick={handlePrint}>
-                طباعة الصفحة الحالية
+                طباعة الصفحة الحالية فقط
               </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Print settings panel */}
+        <div className="print-settings">
+          <div className="print-settings-row">
+            <label className="print-settings-label">حجم الخط في التقرير:</label>
+            <select
+              className="select print-settings-select"
+              value={printSettings.fontSize}
+              onChange={(e) => setPrintSettings(prev => ({ ...prev, fontSize: e.target.value }))}
+            >
+              <option value="small">صغير</option>
+              <option value="medium">متوسط</option>
+              <option value="large">كبير</option>
+            </select>
+          </div>
+          <div className="print-settings-row">
+            <label className="print-settings-label">عرض الأعمدة:</label>
+            <select
+              className="select print-settings-select"
+              value={printSettings.widthMode}
+              onChange={(e) => setPrintSettings(prev => ({ ...prev, widthMode: e.target.value }))}
+            >
+              <option value="compact">ضيق (مزيد من الأعمدة)</option>
+              <option value="normal">عادي</option>
+              <option value="wide">واسع (مساحة أكبر للنص)</option>
+            </select>
+          </div>
+          <div className="print-settings-row">
+            <span className="print-settings-label">أعمدة الطباعة (حسب التبويب الحالي):</span>
+            <div className="print-settings-columns">
+              {(columnDefs[activeTab] || []).map(col => (
+                <label key={col.key} className="print-settings-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={printSettings.columns[activeTab][col.key] !== false}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setPrintSettings(prev => ({
+                        ...prev,
+                        columns: {
+                          ...prev.columns,
+                          [activeTab]: {
+                            ...prev.columns[activeTab],
+                            [col.key]: checked
+                          }
+                        }
+                      }))
+                    }}
+                  />
+                  <span>{col.label}</span>
+                </label>
+              ))}
             </div>
           </div>
         </div>
